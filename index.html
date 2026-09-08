@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#f5f3ee">
+<link rel="manifest" href="manifest.json">
+<title>分类词卡</title>
+<style>
+:root{--bg:#f5f3ee;--card:#fff;--ink:#202020;--muted:#777;--line:#ddd9d0;--good:#2c8a58;--bad:#c54b4b}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif}
+button{font:inherit}
+#app{max-width:820px;margin:auto;padding:calc(env(safe-area-inset-top) + 14px) 14px calc(env(safe-area-inset-bottom) + 20px)}
+header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+h1{font-size:22px;margin:0;font-weight:800}.stats{text-align:right;font-size:12px;color:var(--muted)}.stats b{font-size:18px;color:var(--ink)}
+.panel{background:#fff;border:1px solid var(--line);border-radius:22px;padding:24px 18px;text-align:center;box-shadow:0 2px 12px #00000008}
+.panel h2{margin:0 0 10px;font-size:22px}.panel p{font-size:14px;line-height:1.7;color:#666;margin:8px 0 18px}
+.primary,.secondary{border-radius:13px;padding:12px 20px;font-weight:750;border:1px solid var(--line)}.primary{background:#222;color:#fff;border-color:#222}.secondary{background:#fff;color:#222}
+.row{display:flex;justify-content:center;gap:9px}
+#game{display:none}.info{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:9px}.pill{background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 10px;font-size:12px}
+.progress{height:5px;background:#e3e0d9;border-radius:9px;overflow:hidden;margin-bottom:12px}.bar{height:100%;background:#222;width:0%;transition:.2s}
+#targets{display:grid;grid-template-columns:repeat(var(--cols),1fr);gap:8px;margin-bottom:11px}
+.target{background:#fff;border:2px solid var(--line);border-radius:16px;min-height:80px;padding:9px 6px;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:.12s}
+.target.over{border-color:#222;transform:scale(1.025);background:#faf9f3}.word{font-weight:850;font-size:17px}.cn{font-size:11px;color:#888;margin-top:3px}
+#board{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.card{background:#fff;border:1px solid var(--line);border-radius:16px;aspect-ratio:1/1.04;display:flex;flex-direction:column;align-items:center;justify-content:center;touch-action:none;user-select:none;box-shadow:0 1px 2px #0000000b;transition:.12s}
+.card .icon{font-size:40px;line-height:1;margin-bottom:6px}.card .name{font-size:10px;color:#777}
+.card.selected{outline:3px solid #222;transform:translateY(-2px)}.card.good{border-color:var(--good);background:#eef8f1}.card.bad{border-color:var(--bad);background:#fff0f0}
+.ghost{position:fixed;z-index:100;pointer-events:none;width:82px;height:88px;background:#fff;border:2px solid #222;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;transform:translate(-50%,-50%) scale(1.05);box-shadow:0 8px 24px #0002}.ghost .icon{font-size:37px}.ghost .name{font-size:10px;color:#777}
+#toast{position:fixed;z-index:200;left:50%;bottom:calc(env(safe-area-inset-bottom) + 28px);transform:translate(-50%,15px);opacity:0;background:#222;color:#fff;border-radius:999px;padding:9px 14px;font-size:13px;transition:.2s;pointer-events:none}.show{opacity:1!important;transform:translate(-50%,0)!important}
+#end{display:none}
+@media(max-width:390px){#board{grid-template-columns:repeat(3,1fr)}.target{min-height:73px}.word{font-size:15px}.card .icon{font-size:36px}}
+</style>
+</head>
+<body>
+<div id="app">
+<header><h1>分类词卡</h1><div class="stats"><b id="score">0</b> 分<br><span id="combo">连击 0</span></div></header>
+
+<section id="start" class="panel">
+<h2>多分类 · 持续刷牌</h2>
+<p>同时出现多个英文分类。场上始终保持固定数量的图标；每正确归类一张，就立即从对应词库补入新卡。</p>
+<button class="primary" id="startBtn" type="button">开始游戏</button>
+</section>
+
+<section id="game">
+<div class="info"><span class="pill">分类 <b id="catCount">3</b></span><span class="pill">场上 <b id="cardCount">12</b></span><span class="pill">进度 <b id="done">0</b></span></div>
+<div class="progress"><div class="bar" id="bar"></div></div>
+<div id="targets"></div><div id="board"></div>
+</section>
+
+<section id="end" class="panel">
+<h2>本轮完成</h2><p>得分：<b id="finalScore">0</b><br>正确归类：<b id="finalCorrect">0</b></p>
+<div class="row"><button class="primary" id="restartBtn" type="button">再来一轮</button><button class="secondary" id="resetBtn" type="button">重置</button></div>
+</section>
+</div>
+<div id="toast"></div>
+
+<script>
+const BANK=[
+{id:"fruit",word:"FRUIT",cn:"水果",items:[["🍎","apple"],["🍌","banana"],["🍊","orange"],["🍓","strawberry"],["🍇","grape"],["🍉","watermelon"],["🍍","pineapple"],["🥝","kiwi"]]},
+{id:"animal",word:"ANIMALS",cn:"动物",items:[["🐶","dog"],["🐱","cat"],["🐰","rabbit"],["🦊","fox"],["🐼","panda"],["🐸","frog"],["🐯","tiger"],["🐘","elephant"]]},
+{id:"food",word:"FOOD",cn:"食物",items:[["🍕","pizza"],["🍔","burger"],["🍜","noodles"],["🍣","sushi"],["🍰","cake"],["🍞","bread"],["🥚","egg"],["🍟","fries"]]},
+{id:"transport",word:"TRANSPORT",cn:"交通",items:[["🚗","car"],["🚌","bus"],["🚲","bicycle"],["✈️","airplane"],["🚂","train"],["🚢","ship"],["🚁","helicopter"],["🏍️","motorcycle"]]},
+{id:"nature",word:"NATURE",cn:"自然",items:[["🌳","tree"],["🌸","flower"],["🌈","rainbow"],["☀️","sun"],["🌙","moon"],["⭐","star"],["🌊","wave"],["⛰️","mountain"]]},
+{id:"home",word:"HOME",cn:"家居",items:[["🛏️","bed"],["🪑","chair"],["🛋️","sofa"],["💡","lamp"],["🚪","door"],["🪞","mirror"],["🧸","teddy"],["⏰","clock"]]}
+];
+let cats=[],cards=[],score=0,combo=0,correct=0,done=0,targetTotal=60,drag=null,timer;
+const $=id=>document.getElementById(id);
+function shuffle(a){return [...a].sort(()=>Math.random()-.5)}
+function startGame(){
+ score=combo=correct=done=0;
+ cats=shuffle(BANK).slice(0,Math.random()<.35?4:3);
+ targetTotal=cats.length===4?72:60;
+ document.documentElement.style.setProperty("--cols",cats.length);
+ $("start").style.display="none";$("end").style.display="none";$("game").style.display="block";
+ $("catCount").textContent=cats.length;$("cardCount").textContent=cats.length===4?16:12;
+ renderTargets();cards=[];fillInitial();update();
+}
+function renderTargets(){
+ $("targets").innerHTML=cats.map(c=>`<div class="target" data-id="${c.id}"><div class="word">${c.word}</div><div class="cn">${c.cn}</div></div>`).join("");
+}
+function pool(){return cats.flatMap(c=>c.items.map(x=>({cat:c.id,icon:x[0],name:x[1]})))}
+function fillInitial(){let p=pool(),n=cats.length===4?16:12;cards=shuffle(p).slice(0,n);renderBoard()}
+function renderBoard(){
+ $("board").innerHTML=cards.map((c,i)=>`<div class="card" data-i="${i}"><div class="icon">${c.icon}</div><div class="name">${c.name}</div></div>`).join("");
+ document.querySelectorAll(".card").forEach(el=>el.addEventListener("pointerdown",startDrag,{passive:false}));
+}
+function startDrag(e){
+ e.preventDefault();const el=e.currentTarget,i=+el.dataset.i,c=cards[i];
+ drag={i,c,el,ghost:document.createElement("div")};drag.ghost.className="ghost";
+ drag.ghost.innerHTML=`<div class="icon">${c.icon}</div><div class="name">${c.name}</div>`;document.body.appendChild(drag.ghost);
+ el.classList.add("selected");move(e);el.addEventListener("pointermove",move);el.addEventListener("pointerup",end,{once:true});el.addEventListener("pointercancel",end,{once:true});
+}
+function move(e){
+ if(!drag)return;drag.ghost.style.left=e.clientX+"px";drag.ghost.style.top=e.clientY+"px";
+ document.querySelectorAll(".target").forEach(t=>{let r=t.getBoundingClientRect();t.classList.toggle("over",e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom)})
+}
+function end(e){
+ if(!drag)return;let d=drag,x=e.clientX,y=e.clientY,target=null;
+ document.querySelectorAll(".target").forEach(t=>{let r=t.getBoundingClientRect();if(x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom)target=t;t.classList.remove("over")});
+ d.ghost.remove();d.el.classList.remove("selected");d.el.removeEventListener("pointermove",move);drag=null;
+ if(target)judge(d.i,d.c,target.dataset.id);
+}
+function judge(i,c,target){
+ const el=document.querySelector(`.card[data-i="${i}"]`);
+ if(c.cat===target){
+  let pts=10+Math.min(combo,10)*2;score+=pts;combo++;correct++;done++;toast("正确  +"+pts);el.classList.add("good");
+  setTimeout(()=>replace(i),150);
+ }else{score=Math.max(0,score-3);combo=0;toast("分类不匹配  −3");el.classList.add("bad");setTimeout(()=>el.classList.remove("bad"),320)}
+ update();
+}
+function replace(i){
+ if(done>=targetTotal){finish();return}
+ const p=pool(),used=new Set(cards.map(x=>x.name));let options=p.filter(x=>!used.has(x.name));if(!options.length)options=p;
+ cards[i]=options[Math.floor(Math.random()*options.length)];renderBoard();update();
+}
+function update(){$("score").textContent=score;$("combo").textContent="连击 "+combo;$("done").textContent=done;$("bar").style.width=Math.min(100,done/targetTotal*100)+"%"}
+function finish(){$("game").style.display="none";$("end").style.display="block";$("finalScore").textContent=score;$("finalCorrect").textContent=correct}
+function toast(s){$("toast").textContent=s;$("toast").classList.add("show");clearTimeout(timer);timer=setTimeout(()=>$("toast").classList.remove("show"),650)}
+document.addEventListener("DOMContentLoaded",()=>{$("startBtn").addEventListener("click",startGame);$("restartBtn").addEventListener("click",startGame);$("resetBtn").addEventListener("click",()=>location.reload())});
+</script>
+</body>
+</html>
